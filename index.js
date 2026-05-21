@@ -31,6 +31,22 @@ app.get('/api/dev/events', (req, res) => {
   res.json(rows.map(r => ({ ...r, payload: JSON.parse(r.payload || '{}') })))
 })
 
+// Debug: query Pitel CDR API for any call_id
+import { getPitelToken } from './services/pitelAuth.js'
+import fetch from 'node-fetch'
+app.get('/api/dev/pitel-cdr/:callId', async (req, res) => {
+  try {
+    const token = await getPitelToken()
+    const r = await fetch(`${process.env.PITEL_BASE_URL}/v1/cdr/${req.params.callId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await r.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DEV-ONLY: seed callId→sessionId mapping for E2E SSE testing
 app.post('/api/dev/seed-session', (req, res) => {
   const { callId, sessionId } = req.body
