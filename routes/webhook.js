@@ -39,7 +39,7 @@ router.post('/pitel', (req, res) => {
       SELECT id, call_id FROM calls
       WHERE state = 'initiated' AND phone = ?
         AND datetime(created_at) >= datetime('now', '-10 minutes', 'localtime')
-      ORDER BY created_at DESC LIMIT 1
+      ORDER BY created_at ASC LIMIT 1
     `).get(payload.to_number)
     if (orphan) {
       console.log(`[webhook] Matched CDR ${callId} → initiated record ${orphan.call_id} via phone ${payload.to_number}`)
