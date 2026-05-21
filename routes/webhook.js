@@ -67,7 +67,8 @@ async function processWebhook({ callId, event, payload, vr, transcripts, callRes
       console.log(`[webhook] Checking candidate ${candidate.call_id}: pitel_billsec=${pitelBillsec} vs cdr_billsec=${payload.billsec}`)
       if (pitelBillsec !== null && pitelBillsec === payload.billsec) {
         console.log(`[webhook] ✅ Matched CDR ${callId} → ${candidate.call_id} via billsec=${payload.billsec}`)
-        db.prepare(`UPDATE calls SET call_id = ? WHERE id = ?`).run(callId, candidate.id)
+        // Đổi call_id VÀ state='matching' ngay lập tức để CDR khác không match vào cùng record
+        db.prepare(`UPDATE calls SET call_id = ?, state = 'matching' WHERE id = ? AND state = 'initiated'`).run(callId, candidate.id)
         const sid = sessionMap.get(candidate.call_id)
         if (sid) { sessionMap.set(callId, sid); sessionMap.delete(candidate.call_id) }
         existing = { id: candidate.id, call_id: callId }
