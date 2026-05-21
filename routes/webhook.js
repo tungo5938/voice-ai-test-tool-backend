@@ -1,8 +1,24 @@
 import { Router } from 'express'
 import { sessionMap, sseClients } from '../services/sessionMap.js'
+import { getPitelToken } from '../services/pitelAuth.js'
+import fetch from 'node-fetch'
 import db from '../services/db.js'
 
 const router = Router()
+
+// Query Pitel CDR API để lấy billsec của click2call leg
+async function getPitelBillsec(clickCallId) {
+  try {
+    const token = await getPitelToken()
+    const res = await fetch(`${process.env.PITEL_BASE_URL}/v1/cdr/${clickCallId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    return data?.billsec ?? null
+  } catch {
+    return null
+  }
+}
 
 router.post('/pitel', (req, res) => {
   // Verify secret nếu có config
@@ -29,26 +45,34 @@ router.post('/pitel', (req, res) => {
   const transcripts = vr.transcripts ? JSON.stringify(vr.transcripts) : null
   const callResult = vr.call_result || null
 
-  // Upsert call record
+  // Async: upsert sau khi match xong
+  processWebhook({ callId, event, payload, vr, transcripts, callResult })
+})
+
+async function processWebhook({ callId, event, payload, vr, transcripts, callResult }) {
+  // 1. Thử exact match
   let existing = db.prepare(`SELECT id, call_id FROM calls WHERE call_id = ?`).get(callId)
 
-  // Fallback: nếu CDR call_id không khớp với click2call call_id,
-  // tìm bản ghi 'initiated' cùng số điện thoại trong vòng 10 phút
-  if (!existing && payload.to_number) {
-    const orphan = db.prepare(`
+  // 2. Fallback: match theo billsec từ Pitel CDR API — unique kể cả multi-user
+  if (!existing && payload.to_number && payload.billsec) {
+    const candidates = db.prepare(`
       SELECT id, call_id FROM calls
       WHERE state = 'initiated' AND phone = ?
-        AND datetime(created_at) >= datetime('now', '-10 minutes', 'localtime')
-      ORDER BY created_at ASC LIMIT 1
-    `).get(payload.to_number)
-    if (orphan) {
-      console.log(`[webhook] Matched CDR ${callId} → initiated record ${orphan.call_id} via phone ${payload.to_number}`)
-      // Cập nhật call_id cũ thành call_id từ CDR, giữ nguyên test_case_id
-      db.prepare(`UPDATE calls SET call_id = ? WHERE id = ?`).run(callId, orphan.id)
-      // Cập nhật sessionMap nếu có
-      const sid = sessionMap.get(orphan.call_id)
-      if (sid) { sessionMap.set(callId, sid); sessionMap.delete(orphan.call_id) }
-      existing = { id: orphan.id, call_id: callId }
+        AND datetime(created_at) >= datetime('now', '-30 minutes', 'localtime')
+      ORDER BY created_at ASC
+    `).all(payload.to_number)
+
+    for (const candidate of candidates) {
+      const pitelBillsec = await getPitelBillsec(candidate.call_id)
+      console.log(`[webhook] Checking candidate ${candidate.call_id}: pitel_billsec=${pitelBillsec} vs cdr_billsec=${payload.billsec}`)
+      if (pitelBillsec !== null && pitelBillsec === payload.billsec) {
+        console.log(`[webhook] ✅ Matched CDR ${callId} → ${candidate.call_id} via billsec=${payload.billsec}`)
+        db.prepare(`UPDATE calls SET call_id = ? WHERE id = ?`).run(callId, candidate.id)
+        const sid = sessionMap.get(candidate.call_id)
+        if (sid) { sessionMap.set(callId, sid); sessionMap.delete(candidate.call_id) }
+        existing = { id: candidate.id, call_id: callId }
+        break
+      }
     }
   }
 
@@ -85,7 +109,7 @@ router.post('/pitel', (req, res) => {
     )
   }
 
-  // Push SSE về frontend nếu có session đang lắng nghe
+  // Push SSE về frontend
   const sessionId = sessionMap.get(callId)
   if (sessionId) {
     const client = sseClients.get(sessionId)
@@ -93,6 +117,6 @@ router.post('/pitel', (req, res) => {
       client.write(`data: ${JSON.stringify({ callId, event, ...payload })}\n\n`)
     }
   }
-})
+}
 
 export default router
