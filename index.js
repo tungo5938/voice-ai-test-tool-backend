@@ -24,6 +24,13 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
 })
 
+// Debug: view raw call_events
+import db from './services/db.js'
+app.get('/api/dev/events', (req, res) => {
+  const rows = db.prepare('SELECT * FROM call_events ORDER BY id DESC LIMIT 30').all()
+  res.json(rows.map(r => ({ ...r, payload: JSON.parse(r.payload || '{}') })))
+})
+
 // DEV-ONLY: seed callId→sessionId mapping for E2E SSE testing
 app.post('/api/dev/seed-session', (req, res) => {
   const { callId, sessionId } = req.body
