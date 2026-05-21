@@ -30,7 +30,27 @@ router.post('/pitel', (req, res) => {
   const callResult = vr.call_result || null
 
   // Upsert call record
-  const existing = db.prepare(`SELECT id FROM calls WHERE call_id = ?`).get(callId)
+  let existing = db.prepare(`SELECT id, call_id FROM calls WHERE call_id = ?`).get(callId)
+
+  // Fallback: nếu CDR call_id không khớp với click2call call_id,
+  // tìm bản ghi 'initiated' cùng số điện thoại trong vòng 10 phút
+  if (!existing && payload.to_number) {
+    const orphan = db.prepare(`
+      SELECT id, call_id FROM calls
+      WHERE state = 'initiated' AND phone = ?
+        AND datetime(created_at) >= datetime('now', '-10 minutes', 'localtime')
+      ORDER BY created_at DESC LIMIT 1
+    `).get(payload.to_number)
+    if (orphan) {
+      console.log(`[webhook] Matched CDR ${callId} → initiated record ${orphan.call_id} via phone ${payload.to_number}`)
+      // Cập nhật call_id cũ thành call_id từ CDR, giữ nguyên test_case_id
+      db.prepare(`UPDATE calls SET call_id = ? WHERE id = ?`).run(callId, orphan.id)
+      // Cập nhật sessionMap nếu có
+      const sid = sessionMap.get(orphan.call_id)
+      if (sid) { sessionMap.set(callId, sid); sessionMap.delete(orphan.call_id) }
+      existing = { id: orphan.id, call_id: callId }
+    }
+  }
 
   if (!existing) {
     db.prepare(`
