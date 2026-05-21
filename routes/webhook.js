@@ -6,15 +6,18 @@ import db from '../services/db.js'
 
 const router = Router()
 
-// Query Pitel CDR API để lấy billsec của click2call leg
-async function getPitelBillsec(clickCallId) {
+// Query Pitel CDR API lấy time_ended của click2call leg
+async function getPitelTimeEnded(clickCallId) {
   try {
     const token = await getPitelToken()
     const res = await fetch(`${process.env.PITEL_BASE_URL}/v1/cdr/${clickCallId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const data = await res.json()
-    return data?.billsec ?? null
+    if (!data?.time_ended) return null
+    // time_ended từ Pitel là giờ VN (UTC+7) → đổi sang UTC timestamp
+    const utcMs = new Date(data.time_ended.replace(' ', 'T') + '+07:00').getTime()
+    return Math.floor(utcMs / 1000) // unix seconds UTC
   } catch {
     return null
   }
@@ -53,8 +56,8 @@ async function processWebhook({ callId, event, payload, vr, transcripts, callRes
   // 1. Thử exact match
   let existing = db.prepare(`SELECT id, call_id FROM calls WHERE call_id = ?`).get(callId)
 
-  // 2. Fallback: match theo billsec từ Pitel CDR API — unique kể cả multi-user
-  if (!existing && payload.to_number && payload.billsec) {
+  // 2. Fallback: match theo time_ended từ Pitel CDR API (gap 30-600s sau khi voicebot CDR đến)
+  if (!existing && payload.to_number) {
     const candidates = db.prepare(`
       SELECT id, call_id FROM calls
       WHERE state = 'initiated' AND phone = ?
@@ -62,11 +65,14 @@ async function processWebhook({ callId, event, payload, vr, transcripts, callRes
       ORDER BY created_at ASC
     `).all(payload.to_number)
 
+    const nowUtc = Math.floor(Date.now() / 1000)
+
     for (const candidate of candidates) {
-      const pitelBillsec = await getPitelBillsec(candidate.call_id)
-      console.log(`[webhook] Checking candidate ${candidate.call_id}: pitel_billsec=${pitelBillsec} vs cdr_billsec=${payload.billsec}`)
-      if (pitelBillsec !== null && pitelBillsec === payload.billsec) {
-        console.log(`[webhook] ✅ Matched CDR ${callId} → ${candidate.call_id} via billsec=${payload.billsec}`)
+      const timeEndedUTC = await getPitelTimeEnded(candidate.call_id)
+      const gapSeconds = timeEndedUTC !== null ? nowUtc - timeEndedUTC : null
+      console.log(`[webhook] Checking candidate ${candidate.call_id}: time_ended_utc=${timeEndedUTC} gap=${gapSeconds}s`)
+      if (timeEndedUTC !== null && gapSeconds >= 30 && gapSeconds <= 600) {
+        console.log(`[webhook] ✅ Matched CDR ${callId} → ${candidate.call_id} via time proximity (gap=${gapSeconds}s)`)
         // Đổi call_id VÀ state='matching' ngay lập tức để CDR khác không match vào cùng record
         db.prepare(`UPDATE calls SET call_id = ?, state = 'matching' WHERE id = ? AND state = 'initiated'`).run(callId, candidate.id)
         const sid = sessionMap.get(candidate.call_id)
