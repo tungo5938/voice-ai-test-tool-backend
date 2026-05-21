@@ -1,10 +1,12 @@
 import Database from 'better-sqlite3'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { mkdirSync } from 'fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 // DATA_DIR env var allows Railway/Docker to mount a persistent volume
 const dataDir = process.env.DATA_DIR || resolve(__dirname, '../../data')
+mkdirSync(dataDir, { recursive: true })
 const db = new Database(resolve(dataDir, 'calls.db'))
 
 db.exec(`
