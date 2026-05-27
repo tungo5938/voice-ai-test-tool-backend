@@ -14,6 +14,9 @@ export function requireApiKey(req, res, next) {
   // If no key configured → skip (dev mode)
   if (!ADMIN_KEY) return next()
 
+  // Only protect /api/* routes — static files are public
+  if (!req.path.startsWith('/api/')) return next()
+
   // Webhook has its own secret — skip
   if (req.path.startsWith('/api/webhook')) return next()
   // Health check — public
