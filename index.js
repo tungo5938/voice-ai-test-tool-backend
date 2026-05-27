@@ -80,8 +80,9 @@ app.post('/api/dev/seed-session', (req, res) => {
 })
 
 // Serve frontend static files (production)
-const frontendDist = resolve(__dirname, '../frontend/dist')
-if (existsSync(frontendDist)) {
+// Files live at backend/frontend/ (copied from frontend/dist during build)
+const frontendDist = resolve(__dirname, 'frontend')
+if (existsSync(resolve(frontendDist, 'index.html'))) {
   app.use(express.static(frontendDist))
   // Express 5: use /*splat for catch-all (not '*')
   app.get('/{*splat}', (req, res) => {
