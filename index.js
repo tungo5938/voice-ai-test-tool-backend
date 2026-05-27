@@ -6,6 +6,8 @@ import webhookRouter from './routes/webhook.js'
 import sseRouter from './routes/sse.js'
 import testcasesRouter from './routes/testcases.js'
 import reportsRouter from './routes/reports.js'
+import ordersRouter from './routes/orders.js'
+import postmanRouter from './routes/postman.js'
 import { sessionMap } from './services/sessionMap.js'
 
 const app = express()
@@ -19,6 +21,8 @@ app.use('/api/webhook', webhookRouter)
 app.use('/api/sse', sseRouter)
 app.use('/api/testcases', testcasesRouter)
 app.use('/api/reports', reportsRouter)
+app.use('/api/orders', ordersRouter)
+app.use('/api/postman', postmanRouter)
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
@@ -29,6 +33,14 @@ import db from './services/db.js'
 app.get('/api/dev/events', (req, res) => {
   const rows = db.prepare('SELECT * FROM call_events ORDER BY id DESC LIMIT 30').all()
   res.json(rows.map(r => ({ ...r, payload: JSON.parse(r.payload || '{}') })))
+})
+
+// Open browser for GHN login (persistent profile)
+import { openBrowserForLogin } from './services/orderCreator.js'
+app.post('/api/orders/open-browser', async (req, res) => {
+  const { environment = 'test' } = req.body
+  const result = await openBrowserForLogin(environment)
+  res.json(result)
 })
 
 // Debug: query Pitel CDR API for any call_id
