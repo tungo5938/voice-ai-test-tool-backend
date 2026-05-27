@@ -83,10 +83,9 @@ app.post('/api/dev/seed-session', (req, res) => {
 const frontendDist = resolve(__dirname, '../frontend/dist')
 if (existsSync(frontendDist)) {
   app.use(express.static(frontendDist))
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(resolve(frontendDist, 'index.html'))
-    }
+  // Express 5: use /*splat for catch-all (not '*')
+  app.get('/{*splat}', (req, res) => {
+    res.sendFile(resolve(frontendDist, 'index.html'))
   })
   console.log('[static] Serving frontend from', frontendDist)
 }
