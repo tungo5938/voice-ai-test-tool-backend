@@ -23,6 +23,13 @@ import fetch from 'node-fetch'
 const app = express()
 const PORT = process.env.PORT || 3001
 
+// Serve frontend FIRST — before auth so static files are always accessible
+const frontendDist = resolve(__dirname, 'frontend')
+if (existsSync(resolve(frontendDist, 'index.html'))) {
+  app.use(express.static(frontendDist))
+  console.log('[static] Serving frontend from', frontendDist)
+}
+
 app.use(cors())
 app.use(express.json())
 app.use(requireApiKey)
@@ -81,16 +88,11 @@ app.post('/api/dev/seed-session', (req, res) => {
   res.json({ ok: true, callId, sessionId })
 })
 
-// Serve frontend static files (production)
-// Files live at backend/frontend/ (copied from frontend/dist during build)
-const frontendDist = resolve(__dirname, 'frontend')
+// SPA catch-all — must be after all API routes (requires auth like other routes? No — public)
 if (existsSync(resolve(frontendDist, 'index.html'))) {
-  app.use(express.static(frontendDist))
-  // Express 5: use /*splat for catch-all (not '*')
   app.get('/{*splat}', (req, res) => {
     res.sendFile(resolve(frontendDist, 'index.html'))
   })
-  console.log('[static] Serving frontend from', frontendDist)
 }
 
 // Init DB trước khi start server
