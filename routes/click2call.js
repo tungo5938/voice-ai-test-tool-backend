@@ -41,10 +41,12 @@ router.post('/', async (req, res) => {
     if (data.status === 'success' && data.call_id) {
       if (sessionId) sessionMap.set(data.call_id, sessionId)
       // Lưu cuộc gọi vào DB ngay khi khởi tạo thành công
-      db.prepare(`
-        INSERT OR IGNORE INTO calls (call_id, test_case_id, ext, phone, state, time_started)
-        VALUES (?, ?, ?, ?, 'initiated', datetime('now','localtime'))
-      `).run(data.call_id, testCaseId || null, ext, phone)
+      await db.run(
+        `INSERT INTO calls (call_id, test_case_id, ext, phone, state, time_started)
+         VALUES (?, ?, ?, ?, 'initiated', CURRENT_TIMESTAMP)
+         ON CONFLICT (call_id) DO NOTHING`,
+        [data.call_id, testCaseId || null, ext, phone]
+      )
       return res.json({ status: 'success', call_id: data.call_id })
     }
 

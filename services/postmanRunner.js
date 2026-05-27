@@ -28,7 +28,7 @@ export async function runPostmanCollection({ col, runId, orderCodes, requestName
   }
 
   // Load AC rules cho collection
-  const acRules = db.prepare(`SELECT * FROM ac_rules WHERE collection_id = ?`).all(col.id)
+  const acRules = await db.all(`SELECT * FROM ac_rules WHERE collection_id = ?`, [col.id])
 
   for (const orderCode of orderCodes) {
     for (const req of targetRequests) {
@@ -40,20 +40,21 @@ export async function runPostmanCollection({ col, runId, orderCodes, requestName
       const acResults = evaluateAcRules(rules, result.body)
       const allPassed = acResults.length === 0 ? null : acResults.every(r => r.passed) ? 1 : 0
 
-      db.prepare(`
-        INSERT INTO api_test_results
+      await db.run(
+        `INSERT INTO api_test_results
           (run_id, order_code, request_name, method, url, status_code, actual_response, passed, ac_results)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        runId,
-        orderCode,
-        req.name,
-        result.method,
-        result.url,
-        result.status,
-        JSON.stringify(result.body),
-        allPassed ?? 0,
-        JSON.stringify(acResults),
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          runId,
+          orderCode,
+          req.name,
+          result.method,
+          result.url,
+          result.status,
+          JSON.stringify(result.body),
+          allPassed ?? 0,
+          JSON.stringify(acResults),
+        ]
       )
     }
   }
