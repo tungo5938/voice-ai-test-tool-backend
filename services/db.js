@@ -29,6 +29,14 @@ const SQLITE_SCHEMA = `
     call_id TEXT, event TEXT, payload TEXT,
     received_at TEXT DEFAULT (datetime('now','localtime'))
   );
+  CREATE TABLE IF NOT EXISTS call_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id TEXT UNIQUE,
+    rating TEXT,
+    comment TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime')),
+    updated_at TEXT DEFAULT (datetime('now','localtime'))
+  );
   CREATE TABLE IF NOT EXISTS test_case_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now','localtime'))
@@ -91,6 +99,14 @@ const PG_SCHEMA = `
   CREATE TABLE IF NOT EXISTS call_events (
     id SERIAL PRIMARY KEY, call_id TEXT, event TEXT, payload TEXT,
     received_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE TABLE IF NOT EXISTS call_reviews (
+    id SERIAL PRIMARY KEY,
+    call_id TEXT UNIQUE,
+    rating TEXT,
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
   );
   CREATE TABLE IF NOT EXISTS test_case_groups (
     id SERIAL PRIMARY KEY, name TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW()

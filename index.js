@@ -9,6 +9,7 @@ import testcasesRouter from './routes/testcases.js'
 import reportsRouter from './routes/reports.js'
 import ordersRouter from './routes/orders.js'
 import postmanRouter from './routes/postman.js'
+import monitorRouter from './routes/monitor.js'
 import { sessionMap } from './services/sessionMap.js'
 import { getPitelToken } from './services/pitelAuth.js'
 import fetch from 'node-fetch'
@@ -26,6 +27,7 @@ app.use('/api/testcases', testcasesRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/orders', ordersRouter)
 app.use('/api/postman', postmanRouter)
+app.use('/api/monitor', monitorRouter)
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
