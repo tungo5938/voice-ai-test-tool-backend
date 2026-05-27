@@ -5,6 +5,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { existsSync } from 'fs'
 import { initDb } from './services/db.js'
+import { requireApiKey } from './middleware/auth.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 import click2callRouter from './routes/click2call.js'
@@ -24,6 +25,7 @@ const PORT = process.env.PORT || 3001
 
 app.use(cors())
 app.use(express.json())
+app.use(requireApiKey)
 
 app.use('/api/click2call', click2callRouter)
 app.use('/api/webhook', webhookRouter)
@@ -38,18 +40,18 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() })
 })
 
-// View call events
+// View call events (dev only — not in production)
 import db from './services/db.js'
-app.get('/api/dev/events', async (req, res) => {
-  const rows = await db.all('SELECT * FROM call_events ORDER BY id DESC LIMIT 100')
-  res.json(rows.map(r => ({ ...r, payload: JSON.parse(r.payload || '{}') })))
-})
-
-// View calls
-app.get('/api/dev/calls', async (req, res) => {
-  const rows = await db.all('SELECT * FROM calls ORDER BY id DESC LIMIT 100')
-  res.json(rows)
-})
+if (!process.env.DATABASE_URL) {
+  app.get('/api/dev/events', async (req, res) => {
+    const rows = await db.all('SELECT * FROM call_events ORDER BY id DESC LIMIT 100')
+    res.json(rows.map(r => ({ ...r, payload: JSON.parse(r.payload || '{}') })))
+  })
+  app.get('/api/dev/calls', async (req, res) => {
+    const rows = await db.all('SELECT * FROM calls ORDER BY id DESC LIMIT 100')
+    res.json(rows)
+  })
+}
 
 // Open browser for GHN login (local only)
 import { openBrowserForLogin } from './services/orderCreator.js'
