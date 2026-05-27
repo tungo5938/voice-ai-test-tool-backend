@@ -1,7 +1,12 @@
 import express from 'express'
 import cors from 'cors'
 import 'dotenv/config'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import { existsSync } from 'fs'
 import { initDb } from './services/db.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 import click2callRouter from './routes/click2call.js'
 import webhookRouter from './routes/webhook.js'
 import sseRouter from './routes/sse.js'
@@ -73,6 +78,18 @@ app.post('/api/dev/seed-session', (req, res) => {
   sessionMap.set(callId, sessionId)
   res.json({ ok: true, callId, sessionId })
 })
+
+// Serve frontend static files (production)
+const frontendDist = resolve(__dirname, '../frontend/dist')
+if (existsSync(frontendDist)) {
+  app.use(express.static(frontendDist))
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(resolve(frontendDist, 'index.html'))
+    }
+  })
+  console.log('[static] Serving frontend from', frontendDist)
+}
 
 // Init DB trước khi start server
 initDb().then(() => {
